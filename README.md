@@ -191,8 +191,9 @@ ResearchForge/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ResearchForge.git
-cd ResearchForge
+git clone https://github.com/yoyo2-hub/multi-agent-slr-research-assistant.git
+cd multi-agent-slr-research-assistant
+
 ```
 
 ### 2. Create a virtual environment
