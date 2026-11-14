@@ -11,8 +11,8 @@ requests
 pytest
 
 # RAG (à décommenter au Jour 4)
-# langchain-qdrant
-# qdrant-client
-# sentence-transformers
-# rank-bm25
-# pymupdf
+langchain-qdrant
+qdrant-client
+sentence-transformers
+rank-bm25
+pymupdf
