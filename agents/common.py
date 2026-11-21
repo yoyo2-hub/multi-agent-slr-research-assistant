@@ -62,7 +62,7 @@ def invoke_with_retries(llm, prompt, retries=3):
             return llm.invoke(prompt)
         except Exception as e:
             last_error = e
-            print(f"  [essai {attempt + 1}/{retries}] {type(e).__name__}")
+            print(f"  [essai {attempt + 1}/{retries}] {type(e).__name__}: {str(e)[:200]}")
             time.sleep(2 ** attempt)
     raise RuntimeError(f"LLM call failed after {retries} attempts") from last_error
 
