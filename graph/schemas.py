@@ -1,5 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel, Field
+from typing import Literal, Optional
 
 
 class Paper(BaseModel):
@@ -54,4 +55,36 @@ class ComparisonDraft(BaseModel):
 class Comparison(ComparisonDraft):
     """Résultat final : le contenu du brouillon, plus les vraies preuves retrouvées par le code."""
     evidence: list[Evidence] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+GapType = Literal["methodological", "technical", "empirical",
+                  "evaluation", "integration", "theoretical"]
+
+
+class GapDraft(BaseModel):
+    """Une lacune telle que le LLM la propose (identifiants de preuves seulement)."""
+    description: str
+    type: GapType
+    evidence_ids: list[str] = Field(
+        default_factory=list,
+        description="IDs (e.g. E001) of the evidence passages supporting this gap. "
+                    "Only IDs that appear in the input.",
+    )
+
+
+class GapsDraft(BaseModel):
+    research_gaps: list[GapDraft] = Field(default_factory=list)
+
+
+class ResearchGap(BaseModel):
+    """Lacune finale : preuves, articles de soutien et confiance calculés par le code."""
+    description: str
+    type: GapType
+    supporting_papers: list[str] = Field(default_factory=list)
+    evidence: list[Evidence] = Field(default_factory=list)
+    confidence: Literal["low", "medium", "high"] = "low"
+
+
+class ResearchGaps(BaseModel):
+    research_gaps: list[ResearchGap] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
