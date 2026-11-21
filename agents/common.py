@@ -23,6 +23,7 @@ def format_papers(paper_profiles, max_papers=15, max_evidence_chars=300):
             f"  method: {p.get('method', '')}",
             f"  contributions: {'; '.join(p.get('contributions', []))}",
             f"  limitations: {'; '.join(p.get('limitations', []))}",
+            f"  future_work: {'; '.join(p.get('future_work', []))}",
         ]
         for ev in p.get("evidence", []):
             lines.append(f"  [{ev['evidence_id']}] ({ev.get('section') or 'n/a'}) "
@@ -64,3 +65,15 @@ def invoke_with_retries(llm, prompt, retries=3):
             print(f"  [essai {attempt + 1}/{retries}] {type(e).__name__}")
             time.sleep(2 ** attempt)
     raise RuntimeError(f"LLM call failed after {retries} attempts") from last_error
+
+def format_comparison(comparison):
+    """Met le résultat de l'Agent 4 en texte lisible pour le prompt."""
+    sections = ["similarities", "differences", "existing_contributions",
+                "potentially_distinct_elements", "redundancy_risks"]
+    lines = []
+    for name in sections:
+        items = comparison.get(name) or []
+        if items:
+            lines.append(f"{name}:")
+            lines.extend(f"  - {item}" for item in items)
+    return "\n".join(lines) or "(empty comparison)"

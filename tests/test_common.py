@@ -1,4 +1,4 @@
-from agents.common import format_papers, format_idea, resolve_evidence
+from agents.common import format_comparison, format_papers, format_idea, resolve_evidence
 from tests.sample_data import IDEA_PROFILE, PAPER_PROFILES
 
 
@@ -29,3 +29,9 @@ def test_format_papers_tronque_les_preuves_longues():
 
 def test_format_idea():
     assert "- keywords: time series anomaly detection; contrastive learning; graph attention" in format_idea(IDEA_PROFILE)
+
+def test_format_comparison():
+    text = format_comparison({"similarities": ["A [P1]"], "differences": [], "redundancy_risks": ["B [P2]"]})
+    assert "similarities:" in text and "  - A [P1]" in text
+    assert "differences" not in text
+    assert format_comparison({}) == "(empty comparison)"
