@@ -72,3 +72,4 @@ def test_prompt_contient_comparaison_et_regles():
     assert "Graph attention over sensors" in llm.last_prompt
     assert "[E002]" in llm.last_prompt
     assert "MUST cite at least one evidence ID" in llm.last_prompt
+    assert "Scope each gap to the cited paper(s)" in llm.last_prompt
