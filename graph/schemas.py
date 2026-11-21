@@ -11,3 +11,5 @@ class Paper(BaseModel):
     year: Optional[int] = None
     url: Optional[str] = None
     included: bool = True
+    pdf_path: Optional[str] = None
+    screening_reason: Optional[str] = None
