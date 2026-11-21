@@ -54,3 +54,4 @@ class ComparisonDraft(BaseModel):
 class Comparison(ComparisonDraft):
     """Résultat final : le contenu du brouillon, plus les vraies preuves retrouvées par le code."""
     evidence: list[Evidence] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
