@@ -40,6 +40,10 @@ Rules:
 - Every gap MUST cite at least one evidence ID in evidence_ids, taken from the passages above
   (preferably limitations or future work). Never invent an ID.
 - Do not propose a gap for which you cannot cite evidence: return fewer gaps, or an empty list.
+- Scope each gap to the cited paper(s). Write "P1 does not model ..." or "The benchmark of P2
+  contains few ...", never claims about a whole field such as "existing methods lack",
+  "benchmarks lack" or "no work addresses".
+- Write descriptions with a space between every two words.
 - Do not claim that a gap is proven or that nobody has addressed it. These are candidates only.
 - One idea per gap; do not repeat the same gap in different words.
 - Write each description in one or two clear sentences.
@@ -79,6 +83,6 @@ def discover_research_gaps(comparison, paper_profiles, llm=None):
     if not gaps:
         notes.append("No evidence-backed gap found.")
     if corpus_size < MIN_PAPERS_FOR_HIGH:
-        notes.append(f"Only {corpus_size} paper(s) analyzed: confidence capped at 'medium'.")
+        notes.append(f"Only {corpus_size} paper(s) analyzed: confidence cannot exceed 'medium'.")
 
     return ResearchGaps(research_gaps=gaps, notes=notes)
