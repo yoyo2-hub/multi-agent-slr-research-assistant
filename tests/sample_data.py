@@ -34,3 +34,15 @@ PAPER_PROFILES = [
         ],
     },
 ]
+
+COMPARISON = {
+    "similarities": ["Both use contrastive learning for anomaly detection [P1]"],
+    "differences": ["The idea models sensor dependencies with a graph, P1 treats channels independently [P1]"],
+    "existing_contributions": ["A contrastive detector on public datasets [P1]",
+                               "A unified benchmark [P2]"],
+    "potentially_distinct_elements": [
+        "Graph attention over sensors (motivated by P1's limitation) [P1]",
+        "Evaluation on industrial data (motivated by P2's limitation) [P2]",
+    ],
+    "redundancy_risks": [],
+}
