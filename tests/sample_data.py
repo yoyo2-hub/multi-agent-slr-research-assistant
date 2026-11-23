@@ -46,3 +46,25 @@ COMPARISON = {
     ],
     "redundancy_risks": [],
 }
+
+GAPS = {
+    "research_gaps": [
+        {
+            "description": "P1 does not model inter-sensor dependencies.",
+            "type": "methodological",
+            "supporting_papers": ["P1"],
+            "evidence": [{"evidence_id": "E002", "paper_id": "P1", "section": "Limitations",
+                          "text": "Our approach treats each channel independently and does not model inter-sensor relations."}],
+            "confidence": "low",
+        },
+        {
+            "description": "P2 benchmark contains few real industrial deployments.",
+            "type": "evaluation",
+            "supporting_papers": ["P2"],
+            "evidence": [{"evidence_id": "E003", "paper_id": "P2", "section": "Limitations",
+                          "text": "The benchmark contains few real industrial deployments."}],
+            "confidence": "low",
+        },
+    ],
+    "notes": [],
+}
