@@ -1,4 +1,6 @@
-from agents.common import (bracket_ids, format_comparison, format_gaps, format_idea,
+import re
+
+from agents.common import (BRACKET, bracket_ids, format_comparison, format_gaps, format_idea,
                            invoke_with_retries, unknown_bracket_ids)
 from graph.schemas import CriticalReview, ReviewDraft, VerificationRequest
 from llm import structured_llm
@@ -25,22 +27,26 @@ CORPUS SIZE: {size} analyzed paper(s)
 
 Rules:
 - Critique the research idea, not the literature.
-- Use ONLY the information above. A statement based on the literature must cite the paper_id(s)
-  in square brackets, e.g. "[P1]". A statement based only on your own reasoning about the idea
-  must end with "(reviewer judgment)".
+- Use ONLY the information above.
+- Any statement that mentions a paper must cite it in square brackets, e.g. "[P1]", never as
+  bare text like P1. A statement that mentions no paper and rests only on your own reasoning
+  must end with "(reviewer judgment)". Never put "(reviewer judgment)" on a statement that
+  mentions a paper.
 - Never say that the idea is proven novel, or that it is not novel. Novelty is only a risk here.
 - Gaps with low confidence are weak support: say so instead of relying on them.
 - "missing_evidence": claims or assumptions of the idea that nothing above supports.
 - "verification_requests": only if a specific check could change your conclusion. At most 3.
   Use kind "search_more_literature" with a short search query, or "check_evidence".
 - "feasibility_level" is low, medium or high, with a justification in "feasibility".
+- "feasibility_level" cannot be "high" if something required to carry out the idea (data,
+  resources, a reliable component) appears in missing_evidence or verification_requests.
 - At most 4 items per list. Leave a list empty rather than inventing items.
 - Write with a space between every two words.
 """
 
 
 def known_ids_from_input(comparison, gaps):
-    """Identifiants que la critique a le droit de citer : ceux présents dans ses entrées."""
+    """IDs the review is allowed to cite: those present in its inputs."""
     known = bracket_ids(format_comparison(comparison))
     for gap in gaps.get("research_gaps") or []:
         known.update(gap.get("supporting_papers", []))
@@ -48,8 +54,20 @@ def known_ids_from_input(comparison, gaps):
     return known
 
 
+def mislabeled_statements(statements, known_ids):
+    """Statements tagged (reviewer judgment) that still mention a paper as bare text."""
+    flagged = []
+    for statement in statements:
+        if "(reviewer judgment)" not in statement:
+            continue
+        outside = BRACKET.sub("", statement)      # drop what is already inside brackets
+        if any(re.search(rf"\b{re.escape(i)}\b", outside) for i in known_ids):
+            flagged.append(statement[:60])
+    return flagged
+
+
 def review_research_idea(idea_profile, comparison, gaps, corpus_size=None, llm=None):
-    """Critique l'idée. corpus_size est facultatif et sert aux contrôles du code."""
+    """Critique the idea. corpus_size is optional and only used for the code-side checks."""
     comparison = comparison or {}
     gaps = gaps or {}
 
@@ -101,8 +119,18 @@ def review_research_idea(idea_profile, comparison, gaps, corpus_size=None, llm=N
     statements = (draft.strengths + draft.weaknesses + draft.methodological_issues
                   + draft.novelty_risks + draft.missing_evidence + draft.recommendations
                   + [draft.feasibility])
-    unknown = unknown_bracket_ids(statements, known_ids_from_input(comparison, gaps))
+
+    known = known_ids_from_input(comparison, gaps)
+    unknown = unknown_bracket_ids(statements, known)
     if unknown:
         notes.append(f"Statements cite unknown IDs: {unknown}")
+
+    mislabeled = mislabeled_statements(statements, known)
+    if mislabeled:
+        notes.append(f"{len(mislabeled)} statement(s) mention a paper without a bracket "
+                     f"citation: {mislabeled}")
+
+    if draft.feasibility_level == "high" and draft.verification_requests:
+        notes.append("Feasibility is 'high' but verification requests are open: treat it as provisional.")
 
     return CriticalReview(**draft.model_dump(), needs_more_evidence=needs_more, notes=notes)
