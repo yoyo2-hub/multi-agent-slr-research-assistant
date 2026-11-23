@@ -88,3 +88,33 @@ class ResearchGap(BaseModel):
 class ResearchGaps(BaseModel):
     research_gaps: list[ResearchGap] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+
+class VerificationRequest(BaseModel):
+    """Une vérification que le critique demande avant de conclure."""
+    kind: Literal["search_more_literature", "check_evidence"]
+    reason: str
+    query: Optional[str] = Field(
+        default=None,
+        description="Suggested search query when kind is 'search_more_literature'.",
+    )
+
+
+class ReviewDraft(BaseModel):
+    """Ce que le LLM remplit."""
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    methodological_issues: list[str] = Field(default_factory=list)
+    novelty_risks: list[str] = Field(default_factory=list)
+    feasibility_level: Literal["low", "medium", "high"]
+    feasibility: str = Field(
+        description="One or two sentences justifying the feasibility level."
+    )
+    missing_evidence: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    verification_requests: list[VerificationRequest] = Field(default_factory=list)
+
+
+class CriticalReview(ReviewDraft):
+    """Résultat final : le brouillon, enrichi par les contrôles du code."""
+    needs_more_evidence: bool = False
+    notes: list[str] = Field(default_factory=list)
