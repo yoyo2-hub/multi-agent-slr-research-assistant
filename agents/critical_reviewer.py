@@ -1,6 +1,6 @@
 import re
 
-from agents.common import (BRACKET, bracket_ids, format_comparison, format_gaps, format_idea,
+from agents.common import (bracket_ids, format_comparison, format_gaps, format_idea,
                            invoke_with_retries, unknown_bracket_ids)
 from graph.schemas import CriticalReview, ReviewDraft, VerificationRequest
 from llm import structured_llm
@@ -33,16 +33,21 @@ Rules:
 - Use ONLY the information above.
 - Rely on the comparison and the gaps: when they show a limitation or an overlap, use it in your
   points and cite the paper, e.g. "[P1]". Points that ignore them are generic.
+- Cite a paper only if the information above actually supports the statement.
 - Any statement that mentions a paper must cite it in square brackets, e.g. "[P1]", never as
   bare text like P1. A statement that mentions no paper and rests only on your own reasoning
   must end with "(reviewer judgment)". Never put "(reviewer judgment)" on a statement that
   mentions a paper.
+- A limitation of a paper that the idea addresses supports the idea being distinct; it is not
+  a novelty risk. A novelty risk is something an analyzed paper already does close to the idea.
 - Never say that the idea is proven novel, or that it is not novel. Novelty is only a risk here.
 - Gaps with low confidence are weak support: say so instead of relying on them.
 - "missing_evidence": claims or assumptions of the idea that nothing above supports. For each
   item, explain in weaknesses or methodological_issues why it matters.
+- Do not repeat the same point in several lists.
 - "verification_requests": only if a specific check could change your conclusion. At most 3.
-  Use kind "search_more_literature" with a short search query, or "check_evidence".
+  Use kind "search_more_literature" with a short search query whenever the check is a
+  literature search. Use "check_evidence" only to verify a claim against the analyzed papers.
 - "feasibility_level" is low, medium or high, with a justification in "feasibility".
 - "feasibility_level" cannot be "high" if something required to carry out the idea (data,
   resources, a reliable component) appears in missing_evidence or verification_requests.
@@ -60,6 +65,26 @@ def known_ids_from_input(comparison, gaps):
     return known
 
 
+def bracket_bare_ids(statement, known_ids):
+    """Wrap known IDs written as bare text: 'P1 ignores X' -> '[P1] ignores X'.
+
+    Text already inside brackets is left alone. Returns (statement, changed).
+    """
+    if not known_ids:
+        return statement, False
+    ids = sorted(known_ids, key=len, reverse=True)
+    pattern = re.compile(r"\b(" + "|".join(re.escape(i) for i in ids) + r")\b")
+
+    parts = re.split(r"(\[[^\]]*\])", statement)   # odd parts are inside brackets
+    changed = False
+    for k in range(0, len(parts), 2):
+        new = pattern.sub(r"[\1]", parts[k])
+        if new != parts[k]:
+            parts[k] = new
+            changed = True
+    return "".join(parts), changed
+
+
 def label_statement(statement):
     """Fix the label: a cited statement has no tag, an uncited one has the tag.
 
@@ -74,34 +99,25 @@ def label_statement(statement):
     return statement, False
 
 
-def normalize_labels(data):
-    """Apply label_statement to every statement of the review (in place).
+def normalize_statements(data, known_ids):
+    """Bracket bare IDs, then fix labels, on every statement of the review (in place).
 
-    Returns the number of statements that were changed.
+    Returns (statements_bracketed, statements_relabeled).
     """
-    changed = 0
+    bracketed = relabeled = 0
+
+    def fix(statement):
+        nonlocal bracketed, relabeled
+        statement, b = bracket_bare_ids(statement, known_ids)
+        statement, r = label_statement(statement)
+        bracketed += b
+        relabeled += r
+        return statement
+
     for field in LIST_FIELDS:
-        fixed = []
-        for statement in data[field]:
-            new, was_changed = label_statement(statement)
-            fixed.append(new)
-            changed += was_changed
-        data[field] = fixed
-    data["feasibility"], was_changed = label_statement(data["feasibility"])
-    changed += was_changed
-    return changed
-
-
-def mislabeled_statements(statements, known_ids):
-    """Statements tagged (reviewer judgment) that still mention a paper as bare text."""
-    flagged = []
-    for statement in statements:
-        if TAG not in statement:
-            continue
-        outside = BRACKET.sub("", statement)      # drop what is already inside brackets
-        if any(re.search(rf"\b{re.escape(i)}\b", outside) for i in known_ids):
-            flagged.append(statement[:60])
-    return flagged
+        data[field] = [fix(s) for s in data[field]]
+    data["feasibility"] = fix(data["feasibility"])
+    return bracketed, relabeled
 
 
 def review_research_idea(idea_profile, comparison, gaps, corpus_size=None, llm=None):
@@ -136,8 +152,9 @@ def review_research_idea(idea_profile, comparison, gaps, corpus_size=None, llm=N
     llm = llm or structured_llm(ReviewDraft)
     draft = invoke_with_retries(llm, build_prompt(idea_profile, comparison, gaps, corpus_size))
 
+    known = known_ids_from_input(comparison, gaps)
     data = draft.model_dump()
-    relabeled = normalize_labels(data)
+    bracketed, relabeled = normalize_statements(data, known)
 
     notes = []
     needs_more = bool(draft.verification_requests)
@@ -158,17 +175,12 @@ def review_research_idea(idea_profile, comparison, gaps, corpus_size=None, llm=N
         notes.append("The comparison flagged redundancy risks but the review lists no novelty risk.")
 
     statements = [s for field in LIST_FIELDS for s in data[field]] + [data["feasibility"]]
-
-    known = known_ids_from_input(comparison, gaps)
     unknown = unknown_bracket_ids(statements, known)
     if unknown:
         notes.append(f"Statements cite unknown IDs: {unknown}")
 
-    mislabeled = mislabeled_statements(statements, known)
-    if mislabeled:
-        notes.append(f"{len(mislabeled)} statement(s) mention a paper without a bracket "
-                     f"citation: {mislabeled}")
-
+    if bracketed:
+        notes.append(f"{bracketed} statement(s) mentioned a paper without brackets: fixed by the code.")
     if relabeled:
         notes.append(f"{relabeled} statement(s) had a missing or misplaced '{TAG}' label: "
                      "fixed by the code.")
