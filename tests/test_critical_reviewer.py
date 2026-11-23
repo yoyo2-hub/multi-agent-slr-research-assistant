@@ -102,7 +102,8 @@ def test_prompt_contient_entrees_et_regles():
 
 def test_bracket_bare_ids():
     assert bracket_bare_ids("P1 ignores sensors", {"P1"}) == ("[P1] ignores sensors", True)
-    assert bracket_bare_ids("Fact [P1, P2] and P2", {"P1", "P2"}) == ("Fact [P1, P2] and [P2]", True)
+    assert bracket_bare_ids("Gap in P2 [P2]", {"P1", "P2"}) == ("Gap in P2 [P2]", False)
+    assert bracket_bare_ids("Fact [P1] but P2 differs", {"P1", "P2"}) == ("Fact [P1] but [P2] differs", True)
     assert bracket_bare_ids("No paper here", {"P1"}) == ("No paper here", False)
     assert bracket_bare_ids("P10 is different", {"P1"}) == ("P10 is different", False)
 
@@ -142,3 +143,8 @@ def test_etiquettes_corrigees_par_le_code():
     assert result.weaknesses == ["Based on a paper [P1]"]
     assert result.recommendations == ["Already tagged (reviewer judgment)"]
     assert any("fixed by the code" in n for n in result.notes)
+
+def test_espace_avant_ponctuation_nettoye():
+    d = draft(weaknesses=["Gains are unclear [P1] ."])
+    result = review_research_idea(IDEA_PROFILE, COMPARISON, strong_gaps(), corpus_size=10, llm=FakeLLM(d))
+    assert result.weaknesses == ["Gains are unclear [P1]."]
