@@ -1,5 +1,5 @@
+import re
 import time
-
 from graph.schemas import Evidence
 
 
@@ -77,3 +77,38 @@ def format_comparison(comparison):
             lines.append(f"{name}:")
             lines.extend(f"  - {item}" for item in items)
     return "\n".join(lines) or "(empty comparison)"
+
+BRACKET = re.compile(r"\[([^\]]+)\]")
+
+
+def format_gaps(gaps):
+    """Met le résultat de l'Agent 5 en texte lisible pour le prompt."""
+    items = gaps.get("research_gaps") or []
+    if not items:
+        return "(no evidence-backed gap)"
+    lines = []
+    for i, g in enumerate(items, 1):
+        papers = ", ".join(g.get("supporting_papers", [])) or "n/a"
+        ids = ", ".join(e["evidence_id"] for e in g.get("evidence", [])) or "n/a"
+        lines.append(f"{i}. ({g.get('type')}) {g.get('description')} "
+                     f"(confidence: {g.get('confidence')}; papers: {papers}; evidence: {ids})")
+    return "\n".join(lines)
+
+
+def bracket_ids(text):
+    """Tous les identifiants entre crochets d'un texte : '[P1, P2]' donne {'P1', 'P2'}."""
+    ids = set()
+    for group in BRACKET.findall(text):
+        for token in group.split(","):
+            token = token.strip()
+            if token:
+                ids.add(token)
+    return ids
+
+
+def unknown_bracket_ids(statements, known_ids):
+    """Identifiants cités entre crochets dans les phrases mais absents de known_ids."""
+    found = set()
+    for statement in statements:
+        found |= bracket_ids(statement)
+    return sorted(found - set(known_ids))

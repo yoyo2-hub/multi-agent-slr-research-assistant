@@ -1,5 +1,6 @@
-from agents.common import format_comparison, format_papers, format_idea, resolve_evidence
-from tests.sample_data import IDEA_PROFILE, PAPER_PROFILES
+from agents.common import (bracket_ids, format_comparison, format_gaps, format_idea,
+                           format_papers, resolve_evidence, unknown_bracket_ids)
+from tests.sample_data import GAPS, IDEA_PROFILE, PAPER_PROFILES
 
 
 def test_resolve_evidence_trouve_les_vraies_preuves():
@@ -35,3 +36,15 @@ def test_format_comparison():
     assert "similarities:" in text and "  - A [P1]" in text
     assert "differences" not in text
     assert format_comparison({}) == "(empty comparison)"
+
+
+def test_format_gaps():
+    text = format_gaps(GAPS)
+    assert "(methodological) P1 does not model inter-sensor dependencies." in text
+    assert "confidence: low" in text
+    assert format_gaps({}) == "(no evidence-backed gap)"
+
+
+def test_bracket_helpers():
+    assert bracket_ids("A [P1, P2] and [E001]") == {"P1", "P2", "E001"}
+    assert unknown_bracket_ids(["x [P1, P9]", "y [E001]"], {"P1", "E001"}) == ["P9"]
