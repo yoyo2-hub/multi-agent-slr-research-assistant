@@ -66,13 +66,21 @@ def known_ids_from_input(comparison, gaps):
 
 
 def bracket_bare_ids(statement, known_ids):
-    """Wrap known IDs written as bare text: 'P1 ignores X' -> '[P1] ignores X'.
+    """Wrap known IDs written as bare text, unless the statement already cites them.
 
-    Text already inside brackets is left alone. Returns (statement, changed).
+    'P1 ignores X'     -> '[P1] ignores X'
+    'limit of P1 [P1]' -> unchanged (already cited)
+    Returns (statement, changed).
     """
     if not known_ids:
         return statement, False
-    ids = sorted(known_ids, key=len, reverse=True)
+
+    already = bracket_ids(statement)
+    todo = [i for i in known_ids if i not in already]
+    if not todo:
+        return statement, False
+
+    ids = sorted(todo, key=len, reverse=True)
     pattern = re.compile(r"\b(" + "|".join(re.escape(i) for i in ids) + r")\b")
 
     parts = re.split(r"(\[[^\]]*\])", statement)   # odd parts are inside brackets
@@ -108,6 +116,7 @@ def normalize_statements(data, known_ids):
 
     def fix(statement):
         nonlocal bracketed, relabeled
+        statement = re.sub(r"\s+([.,;:])", r"\1", statement)
         statement, b = bracket_bare_ids(statement, known_ids)
         statement, r = label_statement(statement)
         bracketed += b
