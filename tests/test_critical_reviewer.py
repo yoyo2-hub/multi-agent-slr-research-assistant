@@ -1,6 +1,6 @@
 import copy
 
-from agents.critical_reviewer import review_research_idea
+from agents.critical_reviewer import label_statement, review_research_idea
 from graph.schemas import ReviewDraft, VerificationRequest
 from tests.sample_data import COMPARISON, GAPS, IDEA_PROFILE
 
@@ -16,7 +16,7 @@ class FakeLLM:
 
 
 def draft(**kwargs):
-    base = dict(feasibility_level="medium", feasibility="Reasonable scope.")
+    base = dict(feasibility_level="medium", feasibility="Reasonable scope. (reviewer judgment)")
     base.update(kwargs)
     return ReviewDraft(**base)
 
@@ -95,6 +95,8 @@ def test_prompt_contient_entrees_et_regles():
     assert "(reviewer judgment)" in llm.last_prompt
     assert "2 analyzed paper(s)" in llm.last_prompt
     assert "never as" in llm.last_prompt and "bare text" in llm.last_prompt
+    assert "Rely on the comparison and the gaps" in llm.last_prompt
+    assert "why it matters" in llm.last_prompt
 
 def test_mention_nue_d_un_article_signalee():
     d = draft(
@@ -112,3 +114,22 @@ def test_faisabilite_elevee_avec_verifications_ouvertes():
         VerificationRequest(kind="check_evidence", reason="Dataset availability")])
     result = review_research_idea(IDEA_PROFILE, COMPARISON, strong_gaps(), corpus_size=10, llm=FakeLLM(d))
     assert any("provisional" in n for n in result.notes)
+
+def test_label_statement():
+    assert label_statement("Opinion") == ("Opinion (reviewer judgment)", True)
+    assert label_statement("Fact [P1]") == ("Fact [P1]", False)
+    assert label_statement("Fact [P1] (reviewer judgment)") == ("Fact [P1]", True)
+    assert label_statement("Opinion (reviewer judgment)") == ("Opinion (reviewer judgment)", False)
+
+
+def test_etiquettes_corrigees_par_le_code():
+    d = draft(
+        strengths=["Plain opinion"],
+        weaknesses=["Based on a paper [P1] (reviewer judgment)"],
+        recommendations=["Already tagged (reviewer judgment)"],
+    )
+    result = review_research_idea(IDEA_PROFILE, COMPARISON, strong_gaps(), corpus_size=10, llm=FakeLLM(d))
+    assert result.strengths == ["Plain opinion (reviewer judgment)"]
+    assert result.weaknesses == ["Based on a paper [P1]"]
+    assert result.recommendations == ["Already tagged (reviewer judgment)"]
+    assert any("fixed by the code" in n for n in result.notes)
