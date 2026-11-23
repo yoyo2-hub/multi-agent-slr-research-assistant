@@ -1,6 +1,6 @@
 import copy
 
-from agents.critical_reviewer import label_statement, review_research_idea
+from agents.critical_reviewer import bracket_bare_ids, label_statement, review_research_idea
 from graph.schemas import ReviewDraft, VerificationRequest
 from tests.sample_data import COMPARISON, GAPS, IDEA_PROFILE
 
@@ -97,16 +97,25 @@ def test_prompt_contient_entrees_et_regles():
     assert "never as" in llm.last_prompt and "bare text" in llm.last_prompt
     assert "Rely on the comparison and the gaps" in llm.last_prompt
     assert "why it matters" in llm.last_prompt
+    assert "Do not repeat the same point" in llm.last_prompt
+    assert "supports the idea being distinct" in llm.last_prompt
 
-def test_mention_nue_d_un_article_signalee():
+def test_bracket_bare_ids():
+    assert bracket_bare_ids("P1 ignores sensors", {"P1"}) == ("[P1] ignores sensors", True)
+    assert bracket_bare_ids("Fact [P1, P2] and P2", {"P1", "P2"}) == ("Fact [P1, P2] and [P2]", True)
+    assert bracket_bare_ids("No paper here", {"P1"}) == ("No paper here", False)
+    assert bracket_bare_ids("P10 is different", {"P1"}) == ("P10 is different", False)
+
+
+def test_mention_nue_reparee_par_le_code():
     d = draft(
         strengths=["Addresses a limit of the benchmark P2. (reviewer judgment)"],
-        weaknesses=["Fine point [P1] (reviewer judgment)", "Pure opinion. (reviewer judgment)"],
+        weaknesses=["Compare with P1 baseline"],
     )
     result = review_research_idea(IDEA_PROFILE, COMPARISON, strong_gaps(), corpus_size=10, llm=FakeLLM(d))
-    note = next(n for n in result.notes if "without a bracket citation" in n)
-    assert "1 statement(s)" in note
-    assert "P2" in note
+    assert result.strengths == ["Addresses a limit of the benchmark [P2]."]
+    assert result.weaknesses == ["Compare with [P1] baseline"]
+    assert any("without brackets" in n for n in result.notes)
 
 
 def test_faisabilite_elevee_avec_verifications_ouvertes():
