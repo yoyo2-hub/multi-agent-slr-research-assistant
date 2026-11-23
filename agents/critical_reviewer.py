@@ -6,8 +6,11 @@ from graph.schemas import CriticalReview, ReviewDraft, VerificationRequest
 from llm import structured_llm
 
 MIN_PAPERS_FOR_REVIEW = 5
+TAG = "(reviewer judgment)"
 COMPARISON_KEYS = ("similarities", "differences", "existing_contributions",
                    "potentially_distinct_elements", "redundancy_risks")
+LIST_FIELDS = ("strengths", "weaknesses", "methodological_issues",
+               "novelty_risks", "missing_evidence", "recommendations")
 
 
 def build_prompt(idea_profile, comparison, gaps, corpus_size):
@@ -28,13 +31,16 @@ CORPUS SIZE: {size} analyzed paper(s)
 Rules:
 - Critique the research idea, not the literature.
 - Use ONLY the information above.
+- Rely on the comparison and the gaps: when they show a limitation or an overlap, use it in your
+  points and cite the paper, e.g. "[P1]". Points that ignore them are generic.
 - Any statement that mentions a paper must cite it in square brackets, e.g. "[P1]", never as
   bare text like P1. A statement that mentions no paper and rests only on your own reasoning
   must end with "(reviewer judgment)". Never put "(reviewer judgment)" on a statement that
   mentions a paper.
 - Never say that the idea is proven novel, or that it is not novel. Novelty is only a risk here.
 - Gaps with low confidence are weak support: say so instead of relying on them.
-- "missing_evidence": claims or assumptions of the idea that nothing above supports.
+- "missing_evidence": claims or assumptions of the idea that nothing above supports. For each
+  item, explain in weaknesses or methodological_issues why it matters.
 - "verification_requests": only if a specific check could change your conclusion. At most 3.
   Use kind "search_more_literature" with a short search query, or "check_evidence".
 - "feasibility_level" is low, medium or high, with a justification in "feasibility".
@@ -54,11 +60,43 @@ def known_ids_from_input(comparison, gaps):
     return known
 
 
+def label_statement(statement):
+    """Fix the label: a cited statement has no tag, an uncited one has the tag.
+
+    Returns (statement, changed).
+    """
+    has_citation = bool(bracket_ids(statement))
+    has_tag = TAG in statement
+    if has_citation and has_tag:
+        return statement.replace(TAG, "").rstrip(), True
+    if not has_citation and not has_tag:
+        return statement.rstrip() + " " + TAG, True
+    return statement, False
+
+
+def normalize_labels(data):
+    """Apply label_statement to every statement of the review (in place).
+
+    Returns the number of statements that were changed.
+    """
+    changed = 0
+    for field in LIST_FIELDS:
+        fixed = []
+        for statement in data[field]:
+            new, was_changed = label_statement(statement)
+            fixed.append(new)
+            changed += was_changed
+        data[field] = fixed
+    data["feasibility"], was_changed = label_statement(data["feasibility"])
+    changed += was_changed
+    return changed
+
+
 def mislabeled_statements(statements, known_ids):
     """Statements tagged (reviewer judgment) that still mention a paper as bare text."""
     flagged = []
     for statement in statements:
-        if "(reviewer judgment)" not in statement:
+        if TAG not in statement:
             continue
         outside = BRACKET.sub("", statement)      # drop what is already inside brackets
         if any(re.search(rf"\b{re.escape(i)}\b", outside) for i in known_ids):
@@ -98,6 +136,9 @@ def review_research_idea(idea_profile, comparison, gaps, corpus_size=None, llm=N
     llm = llm or structured_llm(ReviewDraft)
     draft = invoke_with_retries(llm, build_prompt(idea_profile, comparison, gaps, corpus_size))
 
+    data = draft.model_dump()
+    relabeled = normalize_labels(data)
+
     notes = []
     needs_more = bool(draft.verification_requests)
     if draft.verification_requests:
@@ -116,9 +157,7 @@ def review_research_idea(idea_profile, comparison, gaps, corpus_size=None, llm=N
     if comparison.get("redundancy_risks") and not draft.novelty_risks:
         notes.append("The comparison flagged redundancy risks but the review lists no novelty risk.")
 
-    statements = (draft.strengths + draft.weaknesses + draft.methodological_issues
-                  + draft.novelty_risks + draft.missing_evidence + draft.recommendations
-                  + [draft.feasibility])
+    statements = [s for field in LIST_FIELDS for s in data[field]] + [data["feasibility"]]
 
     known = known_ids_from_input(comparison, gaps)
     unknown = unknown_bracket_ids(statements, known)
@@ -130,7 +169,11 @@ def review_research_idea(idea_profile, comparison, gaps, corpus_size=None, llm=N
         notes.append(f"{len(mislabeled)} statement(s) mention a paper without a bracket "
                      f"citation: {mislabeled}")
 
+    if relabeled:
+        notes.append(f"{relabeled} statement(s) had a missing or misplaced '{TAG}' label: "
+                     "fixed by the code.")
+
     if draft.feasibility_level == "high" and draft.verification_requests:
         notes.append("Feasibility is 'high' but verification requests are open: treat it as provisional.")
 
-    return CriticalReview(**draft.model_dump(), needs_more_evidence=needs_more, notes=notes)
+    return CriticalReview(**data, needs_more_evidence=needs_more, notes=notes)
