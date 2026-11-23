@@ -94,3 +94,21 @@ def test_prompt_contient_entrees_et_regles():
     assert "Critique the research idea" in llm.last_prompt
     assert "(reviewer judgment)" in llm.last_prompt
     assert "2 analyzed paper(s)" in llm.last_prompt
+    assert "never as" in llm.last_prompt and "bare text" in llm.last_prompt
+
+def test_mention_nue_d_un_article_signalee():
+    d = draft(
+        strengths=["Addresses a limit of the benchmark P2. (reviewer judgment)"],
+        weaknesses=["Fine point [P1] (reviewer judgment)", "Pure opinion. (reviewer judgment)"],
+    )
+    result = review_research_idea(IDEA_PROFILE, COMPARISON, strong_gaps(), corpus_size=10, llm=FakeLLM(d))
+    note = next(n for n in result.notes if "without a bracket citation" in n)
+    assert "1 statement(s)" in note
+    assert "P2" in note
+
+
+def test_faisabilite_elevee_avec_verifications_ouvertes():
+    d = draft(feasibility_level="high", verification_requests=[
+        VerificationRequest(kind="check_evidence", reason="Dataset availability")])
+    result = review_research_idea(IDEA_PROFILE, COMPARISON, strong_gaps(), corpus_size=10, llm=FakeLLM(d))
+    assert any("provisional" in n for n in result.notes)
